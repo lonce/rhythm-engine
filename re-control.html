@@ -1,0 +1,142 @@
+<html>
+    <head>
+        <meta name="apple-mobile-web-app-capable" content="yes">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+        <script src="http://nishabdam.com:8000/socket.io/socket.io.js"></script>
+        <script>
+            // make_party(n) is a function that gives a roughly
+            // pronounceable string name that has about 13xn bits
+            // of pseudo-randomness in it.
+            var make_party = (function () {
+                var letters  = "abcdefghijklmnopqrstuvwxyz";
+                var category = "vcccvcccvcccccvcccccvccccc";
+                var consonants = "bcdfghjklmnpqrstvwxyz";
+                var vowels = "aeiou";
+
+                return function (n) {
+                    var result = [];
+                    var i, k, a1, a2, a3;
+                    for (i = 0; i < n; ++i) {
+                        k = Math.floor(Math.random() * letters.length);
+                        a1 = letters.charAt(k);
+                        a2 = vowels.charAt(Math.floor(Math.random() * vowels.length));
+                        a3 = consonants.charAt(Math.floor(Math.random() * consonants.length));
+
+                        if (category.charAt(k) === 'c') {
+                            // First letter is a consonant. Make the second
+                            // a vowel and the third a consonant.
+                            result.push(a1 + a2 + a3);
+                        } else {
+                            // First letter is a vowel. Make the second a consonant
+                            // and the third a vowel.
+                            result.push(a1 + a3 + a2);
+                        }
+                    }
+                    return result.join(' ');
+                };
+            }());
+        </script>
+        <script>
+            var socket = io.connect('http://nishabdam.com:8000');
+            var party = make_party(3);
+
+            socket.on('connect', function () {
+                socket.emit('register', {party: party.replace(/ /g, ''), type: "control"});
+            });
+
+            function send(msg) {
+                socket.send(JSON.stringify(msg));
+            }
+
+            function relativeOffset(element, event) {
+                var totalOffsetX = 0;
+                var totalOffsetY = 0;
+                var elemX = 0;
+                var elemY = 0;
+                var currentElement = element;
+
+                do {
+                    totalOffsetX += currentElement.offsetLeft;
+                    totalOffsetY += currentElement.offsetTop;
+                } while(currentElement = currentElement.offsetParent)
+
+                elemX = event.pageX - totalOffsetX;
+                elemY = event.pageY - totalOffsetY;
+
+                return {x:elemX, y:elemY};        
+            }
+
+            function setupCanvas(id) {
+                var canvas = document.getElementById(id);
+                if (!canvas) {
+                    document.write("ERROR: Bad canvas id!");
+                    throw false;
+                }
+
+                canvas.addEventListener("touchstart", makeTouchHandler(newTouch), false);
+                canvas.addEventListener("touchmove", makeTouchHandler(newTouch), false);
+                canvas.addEventListener("touchend", makeTouchHandler(touchDone), false);
+                document.getElementById('play_stop').onclick = function (event) {
+                    send({ selector: 'play_stop' });
+                };
+
+                var context = canvas.getContext('2d');
+                function draw(x, y) {
+                    context.fillStyle = 'white';
+                    context.clearRect(0, 0, canvas.width, canvas.height);
+                    context.lineStyle = 'black';
+                    context.strokeRect(2, 2, canvas.width-4, canvas.height-4);
+                    context.fillStyle = 'red';
+                    context.beginPath();
+                    context.arc(x, y, 10, 0, Math.PI * 2);
+                    context.fill();
+                }
+
+                draw(0, 0);
+
+                // Draw the party name at init time. It will
+                // disappear once you start using the control.
+                context.font = '18px sans-serif';
+                context.fillStyle = 'rgba(0, 0, 0, 0.5)';
+                context.fillText(party, 15, 30);
+
+                var trackedTouch = undefined;
+
+                function newTouch(touch) {
+                    var xy = relativeOffset(canvas, touch);
+                    if (!trackedTouch) { 
+                        // Start tracking this.
+                        trackedTouch = touch.identifier; 
+                    }
+                    if (trackedTouch === touch.identifier) {
+                        send({ selector: "morph", x: xy.x * 180 / canvas.width, y: xy.y * 180 / canvas.height });
+                        draw(xy.x, xy.y);
+                    }
+                }
+
+                function touchDone(touch) {
+                    if (trackedTouch === touch.identifier) {
+                        trackedTouch = undefined;
+                    }
+                }
+
+                function makeTouchHandler(func) {
+                    return function (event) {
+                        event.preventDefault();
+                        var i, N;
+                        for (i = 0, N = event.changedTouches.length; i < N; ++i) {
+                            func(event.changedTouches[i]);
+                        }
+                    };
+                }
+            }
+        </script>
+    </head>
+    <body>
+        <canvas id="touch" width="240" height="240"></canvas>
+        <br/>
+        <button id="play_stop" style="width: 240; height: 80; font-size: x-large">Play/Stop</button>
+        <script>setupCanvas("touch");</script>
+    </body>
+</html>
+

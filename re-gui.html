@@ -1,0 +1,220 @@
+<html>
+    <head>
+        <link rel="stylesheet" href="bootstrap.min.css">
+        <style>
+            .ttt {
+                text-align: left
+            }
+        </style>
+        <!-- <script src="http://nishabdam.com:8000/socket.io/socket.io.js"></script> -->
+        <script src="https://raw.github.com/srikumarks/package/master/package.js"></script>
+        <script>
+            package.config({
+                'org.anclab.steller.rhythm-engine-gui': {path: 're-gui.js', alias: 're-gui'},
+            });
+            package('setupGUI', ['re-gui', '#onload'], function (RhythmEngineGUI) {
+
+                RhythmEngineGUI.setup('kicker', {
+                    playStopButton: 'play_stop',
+                    voices: 'voices',
+                    addVoiceButton: 'add_voice',
+                    tempoTextBox: 'tempo',
+                    morpher: 'morpher',
+                    status: 'status',
+                    presets: 'presets',
+                    saveButton: 'save',
+                    loadButton: 'load',
+                    downloadButton: 'download',
+                    dropArea: 'drop_import',
+                    settingsNameField: 'settings'
+                }, 
+                {
+                    didInitialize: function (name, re) {
+                        console.log("RE GUI initialized");
+
+                        var party_setup = document.getElementById('party_setup');
+                        if (!party_setup || party_setup.hidden) {
+                            return;
+                        }
+
+                        var party_box = document.getElementById('party_box');
+                        var join_party_btn = document.getElementById('join_party');
+
+                        join_party_btn.removeAttribute('disabled');
+
+                        join_party_btn.onclick = function (e) {
+                            var partyName = party_box.value.toLowerCase().replace(/[^a-z]/g, '');
+
+                            var socket = io.connect('http://nishabdam.com:8000');
+                            var morpher = document.getElementById('morpher');
+                            var play_stop = document.getElementById('play_stop');
+
+                            var handlers = {};
+
+                            function defaultHandler(msg) {
+                                console.error(JSON.stringify(msg));
+                            }
+
+                            function dispatch(msg) {
+                                (handlers[msg.selector] || defaultHandler)(msg);
+                            }
+
+                            socket.on('connect', function () {
+                                socket.on('message', function (msgStr) {
+                                    dispatch(JSON.parse(msgStr));
+                                });
+                                socket.emit('register', { party: partyName, type: 'synth' });
+                            });
+
+                            handlers.morph = function (msg) {
+                                re.enableMorph(true);
+                                re.changeMorpherPos(msg.x, msg.y);
+                                morpher.draw();
+                            };
+
+                            handlers.play_stop = function (msg) {
+                                play_stop.onclick();
+                            };
+
+                            setTimeout(function () { 
+                                party_setup.parentNode.removeChild(party_setup); 
+                                party_setup = undefined;
+                            }, 0);
+                        };
+                   }
+                });
+            });
+        </script>
+    </head>
+    <body style="padding-left: 12px; padding-top: 12px">
+        <div class="row">
+            <h1 class="span8">Pete Kellock's Rhythm Engine</h1>
+        </div>
+        <div class="row">
+            <div class="span4">
+                <h3 class="span4">Morpher</h3>
+                <canvas id="morpher" width="180" height="180"/>
+            </div>
+            <div class="span7">
+                <div class="row">
+                    <h3 class="span7">Presets</h3>
+                </div>
+                <div class="row">
+                    <div id="presets" class="span2">
+                        <div class="span2"></div>
+                        <div class="span2"></div>
+                        <div class="span2"></div>
+                        <div class="span2"></div>
+                        <div class="span2"></div>
+                        <div class="span2"></div>
+                        <div class="span2"></div>
+                        <div class="span2"></div>
+                    </div>
+                    <div class="span5 help-text">
+                        <ul>
+                            <li>Click on a preset to save current slider settings into it.
+                            It will turn green.</li>
+                            <li>Drag a green preset into the morph area to include it in the morph.</li>
+                            <li>Shift click a preset in the "morpher" to exclude it from the morph.</li>
+                            <li><a href="re-help.html">More info</a></li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            <div class="span2">
+                <div class="span2 well" hidden id="party_setup">
+                     <div class="row">
+                        <div class="span2">
+                            <input id="party_box" class="span2" style="width:100px" type="text" autofocus placeholder="controller name"/>
+                        <br/><br/>
+                            <button id="join_party" disabled class="primary span2 btn">Join</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="span2 well">
+                   <div class="row">
+                        <div class="span2">
+                            <button id="play_stop" disabled class="primary span2 btn">Play</button>
+                        </div>
+                    </div>
+                    <br/>
+                    <div class="row">
+                        <div class="span2">
+                            <div class="input-append">
+                                <input id="tempo" disabled class="span2" style="width:60px; height:22px" type="text"/>
+                                <label class="add-on" style="height:12px; vertical-align:middle">bpm</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div id="drop_import" class="span2 well">
+                    <div class="row">
+                        <span class="span2">
+                            <button id="download" disabled dropmsgid="drop_message" class="primary btn">Save to file</button>
+                        </span>
+                    </div>
+                    <br/>
+                    <div class="row">
+                        <span class="span2" id="drop_message">
+                            Drop a file here to load it.
+                        </span>
+                        <span class="span2">
+                            <a id="download_link" message="drop_message" hidden="true">snapshot.json</a>
+                        </span>
+                    </div>
+                    <br hidden/>
+                    <div class="row" hidden>
+                        <span class="span2">
+                            <button id="save" disabled class="small btn">Save</button>
+                            <button id="load" disabled class="small btn">Load</button>
+                        </span>
+                    </div>
+                    <br hidden/>
+                    <div class="row" hidden>
+                        <span class="span2">
+                            <input type="text" class="span2" id="settings" list="settings_list"/>
+                            <select class="small span2" id="settings_list"></select>
+                        </span>
+                    </div>
+                </div>   
+            </div>
+        </div>
+        <br/>
+        <div class="row">
+            <h3 class="span4">Voices</h3>
+        </div>
+        <div class="row">
+            <div class="span14">
+                <div class="row" id="voices">
+                    <button id="add_voice" disabled class="span2 large primary btn">Add voice</button>
+                </div>
+            </div>
+        </div>
+        <div class="row">
+            <div class="span12">
+                <h5 class="span12">Notes</h5>
+                <ul>
+                    <li><b>Important:</b> Drum samples are cached locally (~100MB), so please permit 
+                    the browser to use local storage.</li> 
+                    <li>Concept ported to a Javascript interface, from Pete Kellock's 
+                    original implementation. (<b>Status:</b> Incomplete)</li>
+                    <li>Drum samples provided as part of Web Audio API demo 
+                    <a href="http://chromium.googlecode.com/svn/trunk/samples/audio/shiny-drum-machine.html">Shiny drum machine</a> 
+                    by Ken Moore. (Thanks!)</li>
+                    <li>Thanks to twitter for 
+                    <a href="http://twitter.github.com/bootstrap/">Bootstrap</a>!</li>
+                    <li>Bugs found are 
+                    <a href="https://profiles.google.com/srikumarks">my own</a> :P (report 
+                    <a href="http://nishabdam.com:8080/bol/reportlist">here</a>).</li>
+                    <li>Works only in <a href="http://www.google.com/chrome">Chrome</a>.</li>
+                </ul>
+                <div class="row">
+                    <div class="span16">
+                        <span id="status" style="background-color: #8F8F8F; border-radius: 8px; padding: 8px; color: #FFFFFF"></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <script>package('#onload', true)</script>
+    </body>
+</html>

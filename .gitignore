@@ -1,0 +1,5 @@
+*.un~
+*.swp
+.DS_Store
+*.bak
+.*
